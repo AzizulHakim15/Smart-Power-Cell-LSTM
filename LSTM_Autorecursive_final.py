@@ -3,41 +3,39 @@ import time
 import random
 import joblib
 import torch
-torch.set_num_threads(8)
 import torch.nn as nn
 import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
-#from Data_new import process_all_months
 from plot_data import plot_predictions, plot_training_history
-#from data_down_wot import process_all_months
 from event_based_data import process_all_months
 torch.manual_seed(42)
 np.random.seed(42)
+torch.set_num_threads(8)
+
 
 INPUT_STEPS = 500
 OUTPUT_STEPS = 20
 BATCH_SIZE = 32
 EPOCHS = 15
 HIDDEN_SIZE1 = 128
-HIDDEN_SIZE2 = 64  #64
+HIDDEN_SIZE2 = 64 
 HIDDEN_SIZE3 = 32
 LEARNING_RATE = 5e-4
 PATIENCE = 5
-Dropout = 0#0.05  #0.1
+Dropout = 0
 Dynamic_threshold = 2
 Downsample_size = 100
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-data = pd.read_csv(r"C:\Users\ahtan\OneDrive\Desktop\LSTM\SPC_output_1y.csv")
+data = pd.read_csv(r"SPC_output_1y.csv")
 Time_col= ['Time']
 ref_cols = ['P_I_ref', 'Q_I_ref', 'P_I_ref_int', 'Q_I_ref_int']
-#int_meas = ['P_I_meas_int','Q_I_meas_int']
 weather_cols = ['eta_PV']
-meas_cols = ['P_I_meas', 'Q_I_meas' ]#,'P_I_meas_int','Q_I_meas_int']
+meas_cols = ['P_I_meas', 'Q_I_meas' ]
 feature_cols = ref_cols + weather_cols + meas_cols
 
 X_train, y_train, X_val, y_val, X_test, y_test, downsampled_data = process_all_months(
@@ -154,11 +152,10 @@ model = SpcLSTM(n_features, n_targets).to(device)
 criterion = nn.MSELoss(reduction="none")
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, patience=3)
-#weights = torch.tensor([1.98, 1]).to(device)  #1.5,1.2 , 6, 1.2#   1.8,1.2
 time_weights = torch.linspace(1, 1.5, OUTPUT_STEPS).to(device)
 W_P_MSE = 1.5    # heavily penalize P offset
 W_Q_MSE = 2.5    # standard penalty for Q
-W_TRACK = 0.15   # 0.20 applied to the sum of tracking losses
+W_TRACK = 0.15   # 0.15 applied to the sum of tracking losses
 
 train_losses, val_losses = [], []
 train_loss_per_target = np.zeros(n_targets)
@@ -339,7 +336,7 @@ def compute_metrics(true, pred):
     overall_wape = (np.sum(np.abs(true - pred)) / np.sum(np.abs(true))) * 100
     target_titles = [
         "Active power (P) - (TSO-SPC)",
-        "Reactive power (Q) - (TSO-SPC)"]#,"Active power (P) - (SPC-SPC)", "Reactive power (Q) - (SPC-SPC)"]
+        "Reactive power (Q) - (TSO-SPC)"]
     scale = 1e6  # convert to M
     print("\n=== Overall Metrics ===")
     print(f"RMSE : {rmse/ scale:.4f}M, R2 : {r2:.4f}, WAPE : {overall_wape:.2f}%") #, MAPE : {overall_mape:.2f}%
@@ -355,15 +352,14 @@ def compute_metrics(true, pred):
         t_mape = mape[i]
 
         print(f"{name}:")
-        print(f"  RMSE: {t_rmse/scale:.4f}M, MAE: {t_mae/scale:.4f}M,  R2: {t_r2:.4f}, WAPE: {t_wape:.2f}%") #, MAPE: {t_mape:.2f}%
+        print(f"  RMSE: {t_rmse/scale:.4f}M, MAE: {t_mae/scale:.4f}M,  R2: {t_r2:.4f}, WAPE: {t_wape:.2f}%")
         
 
-
 compute_metrics(true_inv, pred_inv)
-plot_predictions(true_inv, pred_inv, ["MW", "MVar"])#, "MW", "MVar"])
+plot_predictions(true_inv, pred_inv, ["MW", "MVar"])
 
 
-def save_trained_model(model, feature_scaler, target_scaler, save_dir="saved_final_model_lstm_auto_recurrsive_new", model_name="spc_lstm__final_recurrsive_new"):
+def save_trained_model(model, feature_scaler, target_scaler, save_dir="lstm_auto_recurrsive", model_name="spc_lstm_recurrsive"):
     os.makedirs(save_dir, exist_ok=True)
     torch.save(model.state_dict(), os.path.join(save_dir, f"{model_name}.pth"))
     joblib.dump(feature_scaler, os.path.join(save_dir, f"{model_name}_feature_scaler.pkl"))
